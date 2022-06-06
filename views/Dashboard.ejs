@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width" />
+        <title>Cockpit - Dashboard</title>
+        <link rel="icon" href="https://cdn.discordapp.com/attachments/618327580470411274/982354629604040744/The_Skeld_logo.png">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');
+
+            body {
+                background-color: #181D3A;
+                text-align: center;
+                color: aliceblue;
+            }
+
+            h1, h2 {
+                font-family: 'Amatic SC';
+            }
+
+            tbody {
+                color: aliceblue;
+            }
+
+            .navbar {
+                font-family: 'Amatic SC';
+                width: 100%;
+                text-align: center;
+                color: aliceblue;
+                background-color: #101326;
+            }
+
+            .navbar a {
+                font-size: 120%;
+                width: 100px;
+            }
+
+            .navbar .right {
+                margin-left: auto;
+                margin-right: 0;
+            }
+
+            .navbar h1 {
+                margin-left: 10px;
+            }
+
+            .scroll {
+                overflow: auto;
+            }
+
+            #panel {
+                background-color: #101326;
+                width: 75%;
+                height: 65%;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                color: aliceblue;
+            }
+
+            #grid {
+                display: grid;
+                grid-template-columns: 90% 10%;
+                grid-template-rows: 100%;
+            }
+
+            #roomTable {
+                text-align: left;
+            }
+
+            #warningModal {
+                color: black;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="navbar">
+            <img src="https://cdn.discordapp.com/attachments/618327580470411274/982354629604040744/The_Skeld_logo.png" alt="Cockpit" width="50px">
+            <h1>Cockpit</h1>
+            <a type="button" class="right btn btn-danger" href="/logout">Log Out</a>
+        </div>
+
+        <div class="modal fade" id="warningModal" tabindex="-1" role="dialog" aria-labelledby="warningModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exampleModalLabel">Warning!</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>You're still using the default password! This could make it easier for others to login into your dashboard. You can change the password in the configuration of your server.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            <% if (defaultPassword) { %>
+                $('#warningModal').modal()
+            <% } %>
+        </script>
+
+        <div class="card" id="panel">
+            <h2 class="card-title" style="margin-top: 10px">Rooms</h2>
+            <div class="card-body" id="grid">
+                <div style="grid-row: 1 / 2; grid-column: 2 / 3">
+                    <a href="/dashboard" class="btn btn-info btn-lg" id="refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </a>
+                </div>
+                <div style="grid-row: 1 / 2; grid-column: 1 / 2" class="scroll">
+                    <table class="table" id="roomTable">
+                        <thead class="thead-dark">
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Code</th>
+                            <th scope="col">Host</th>
+                            <th scope="col">Privacy</th>
+                            <th scope="col">Players</th>
+                            <th scope="col">State</th>
+                            <th scope="col">Settings</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <% var i = 0;
+                        rooms.forEach((room, code) => {
+                            var gameState = room.gameState === 0 ? "In Lobby" : room.gameState === 1 ? "In Game" : "Ended";
+                            i++; %>
+                            <tr>
+                                <th scope="row"><%= i %></th>
+                                <td><%= GameCode.convertIntToString(code) %></td>
+                                <td><%= room.host.playerInfo.defaultOutfit.name %></td>
+                                <td><%= room.privacy.charAt(0).toUpperCase() + room.privacy.slice(1) %></td>
+                                <td><%= room.players.size %> / <%= room.settings.maxPlayers %></td>
+                                <td><%= gameState %></td>
+                                <td>
+                                    <a href="/room?code=<%= code %>" class="btn btn-primary badge-pill">
+                                        <span class="glyphicon glyphicon-cog"></span>
+                                    </a>
+                                </td>
+                            </tr>
+                        <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

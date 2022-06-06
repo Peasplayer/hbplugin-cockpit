@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width" />
+        <title>Cockpit - Room</title>
+        <link rel="icon" href="https://cdn.discordapp.com/attachments/618327580470411274/982354629604040744/The_Skeld_logo.png">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');
+
+            body {
+                background-color: #181D3A;
+            }
+
+            h1, h2 {
+                font-family: 'Amatic SC';
+            }
+
+            .form-control {
+                width: 50%;
+                margin: 0 auto;
+            }
+
+            tbody {
+                color: aliceblue;
+            }
+
+            .navbar {
+                font-family: 'Amatic SC';
+                width: 100%;
+                text-align: center;
+                color: aliceblue;
+                background-color: #101326;
+            }
+
+            .navbar a {
+                font-size: 120%;
+                width: 100px;
+            }
+
+            .navbar .right {
+                margin-left: auto;
+                margin-right: 0;
+            }
+
+            .navbar h1 {
+                margin-left: 10px;
+            }
+
+            .navbar div {
+                margin-left: 10px;
+            }
+
+            .scroll {
+                overflow: auto;
+            }
+
+            #panel {
+                background-color: #101326;
+                width: 75%;
+                height: 65%;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                color: aliceblue;
+            }
+
+            #panel div * > :not(a, span){
+                margin-top: 10px;
+            }
+
+            #grid {
+                display: grid;
+                grid-template-columns: repeat(3, 30%) 10%;
+                grid-template-rows: repeat(2, 10% 40%);
+            }
+
+            #grid div {
+                text-align: center;
+            }
+
+            #table {
+                text-align: left;
+                width: 85%;
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="navbar">
+            <img src="https://cdn.discordapp.com/attachments/618327580470411274/982354629604040744/The_Skeld_logo.png" alt="Cockpit" width="50px">
+            <div>
+                <h1>Cockpit</h1>
+            </div>
+            <div>
+                <a type="button" class="btn btn-info" href="/dashboard">Go Back</a>
+            </div>
+            <a type="button" class="right btn btn-danger" href="/logout">Log Out</a>
+        </div>
+        <div class="card" id="panel">
+            <div class="card-body" id="grid">
+                <div style="grid-row: 1 / 2; grid-column: 1 / 2">
+                    <h1>Closing</h1>
+                </div>
+
+                <div style="grid-row: 2 / 3; grid-column: 1 / 2">
+                    <form action="/room/close?code=<%= room.code %>" method="post">
+                        <label for="closeReason">Close the Room</label>
+                        <input type="text" id=closeReason name="closeReason" class="form-control" aria-describedby="closeReason" placeholder="Enter Reason for closing the room" required/>
+                        <button type="submit" class="btn btn-danger">Close</button>
+                    </form>
+                </div>
+
+                <div style="grid-row: 3 / 4; grid-column: 1 / 2">
+                    <h1>Chatting</h1>
+                </div>
+
+                <div style="grid-row: 4 / 5; grid-column: 1 / 2">
+                    <form action="/room/chat?code=<%= room.code %>" method="post">
+                        <label for="message">Send message to the Room</label>
+                        <input type="text" id=message name="message" class="form-control" aria-describedby="message" placeholder="Enter the message" required/>
+                        <button type="submit" class="btn btn-danger">Send</button>
+                    </form>
+                </div>
+
+                <div style="grid-row: 1 / 2; grid-column: 2 / 3">
+                    <h1>General Information</h1>
+                </div>
+
+                <div style="grid-row: 2 / 3; grid-column: 2 / 3">
+                    <p>Code: <%= GameCode.convertIntToString(room.code) %></p>
+                    <p>Host: <%= room.host.playerInfo.defaultOutfit.name %></p>
+                    <p>Privacy: <%= room.privacy.charAt(0).toUpperCase() + room.privacy.slice(1) %></p>
+                    <p>Players: <%= room.players.size%> / <%= room.settings.maxPlayers%></p>
+                    <p>State: <%= gameState = room.gameState === 0 ? "In Lobby" : room.gameState === 1 ? "In Game" : "Ended" %></p>
+                    <p>Created at: <%= new Date(room.createdAt).toLocaleString("en-GB") %></p>
+                </div>
+
+                <div style="grid-row: 1 / 2; grid-column: 3 / 4">
+                    <h1>Players</h1>
+                </div>
+
+                <div style="grid-row: 2 / 3; grid-column: 3 / 4" class="scroll">
+                    <table class="table" id="table">
+                        <thead class="thead-dark">
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Role</th>
+                            <th scope="col">Level</th>
+                            <th scope="col">Host</th>
+                            <th scope="col">Server-ID</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                            <% var i = 0;
+                            room.players.forEach((player, id) => {
+                                i++; %>
+                                <tr>
+                                    <th scope="row"><%= i %></th>
+                                    <td><%= player.playerInfo.defaultOutfit.name %></td>
+                                    <td><%= player.playerInfo.roleType.toString().split(" ")[1].replace("Role", "") %></td>
+                                    <td><%= player.playerLevel %></td>
+                                    <td><%= player.isHost ? "Yes" : "No" %></td>
+                                    <td><%= player.clientId %></td>
+                                    <td>
+                                        <a href="/room/kick?code=<%= room.code %>&player=<%= player.clientId %>" class="btn btn-danger">
+                                            <span class="glyphicon glyphicon-remove" style="margin-top: 0px"></span>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="grid-row: 3 / 4; grid-column: 2 / 3">
+                    <h1>Room Settings</h1>
+                </div>
+
+                <div style="grid-row: 4 / 5; grid-column: 2 / 3" class="scroll">
+                    <table class="table" id="table">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">Settings</th>
+                                <th scope="col">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Default Settings</td>
+                                <td><%= room.settings.isDefaults ? "Yes" : "No" %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Anonymous Votes</td>
+                                <td><%= room.settings.anonymousVotes ? "Yes" : "No" %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Common Tasks</td>
+                                <td><%= room.settings.commonTasks %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Confirm Ejects</td>
+                                <td><%= room.settings.confirmEjects ? "Yes" : "No" %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Crewmate Vision</td>
+                                <td><%= room.settings.crewmateVision %>x</td>
+                            </tr>
+
+                            <tr>
+                                <td>Discussion Time</td>
+                                <td><%= room.settings.discussionTime %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Emergency Cooldown</td>
+                                <td><%= room.settings.emergencyCooldown %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Impostor Vision</td>
+                                <td><%= room.settings.impostorVision %>x</td>
+                            </tr>
+
+                            <tr>
+                                <td>Language</td>
+                                <td><%= GameKeyword[room.settings.keywords] %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Kill Cooldown</td>
+                                <td><%= room.settings.killCooldown %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Kill Distance</td>
+                                <td><%= KillDistance[room.settings.killDistance] %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Long Tasks</td>
+                                <td><%= room.settings.longTasks %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Map</td>
+                                <td><%= GameMap[room.settings.map] %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Maximum Players</td>
+                                <td><%= room.settings.maxPlayers %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Emergency Meetings</td>
+                                <td><%= room.settings.numEmergencies %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Impostors</td>
+                                <td><%= room.settings.numImpostors %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Player Speed</td>
+                                <td><%= room.settings.playerSpeed %>x</td>
+                            </tr>
+
+                            <tr>
+                                <td>Short Tasks</td>
+                                <td><%= room.settings.shortTasks %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Taskbar Updates</td>
+                                <td><%= TaskBarUpdate[room.settings.taskbarUpdates] %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Visual Tasks</td>
+                                <td><%= room.settings.visualTasks ? "Yes" : "No" %></td>
+                            </tr>
+
+                            <tr>
+                                <td>Voting Time</td>
+                                <td><%= room.settings.votingTime %></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="grid-row: 1 / 2; grid-column: 4 / 5">
+                    <a href="/room?code=<%= room.code %>" class="btn btn-info btn-lg" id="refresh">
+                        <span class="glyphicon glyphicon-refresh"></span> Refresh
+                    </a>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
