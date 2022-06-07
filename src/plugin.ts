@@ -5,33 +5,20 @@ import {
     PlayerSetNameEvent,
     Room,
     Worker,
-    GameCode,
-    GameMap,
-    GameKeyword,
-    KillDistance,
-    TaskBarUpdate,
     RoomCreateEvent,
     RoomDestroyEvent,
     RoomSelectHostEvent,
     RoomGameStartEvent,
     RoomGameEndEvent,
-    BaseRoom
-} from "@skeldjs/hindenburg";
-import {
     RoomSetPrivacyEvent,
     RoomAssignRolesEvent,
     PlayerJoinEvent,
     PlayerLeaveEvent,
-    PlayerSyncSettingsEvent
-} from "@skeldjs/core";
-import express from "express";
-import http from "http";
-import { Server } from "socket.io"
-import bodyParser from "body-parser" ;
-import cookieParser from "cookie-parser";
-import path from "path";
+    PlayerSyncSettingsEvent,
+    BaseRoom
+} from "@skeldjs/hindenburg";
+import { ServerHandler } from "./server";
 import ejs from "ejs";
-import argon2 from "argon2";
 import fs from "fs";
 
 @HindenburgPlugin("hbplugin-cockpit")
@@ -41,9 +28,7 @@ export class CockpitPlugin extends WorkerPlugin {
     maxSession: number
     port: number
     updateDelay: number
-    app = express();
-    server = http.createServer(this.app);
-    io = new Server(this.server);
+    serverHandler: ServerHandler
 
     constructor(worker: Worker, config: any) {
         super(worker, config);
@@ -53,166 +38,65 @@ export class CockpitPlugin extends WorkerPlugin {
         this.maxSession = config.maxSession;
         this.port = config.port;
         this.updateDelay = config.updateDelay;
-    }
-
-    async onPluginLoad() {
-        this.app.use(bodyParser.urlencoded({ extended: false }));
-        this.app.use(bodyParser.json());
-        this.app.use(cookieParser("7h7XBKWsQaCmQ5dwF39D8H89FYd6NwnL2ecxev7nXxeZ3zgV")); //I know that it's very clever to create a secret and make it open source
-        this.app.set("view engine", "ejs");
-        this.app.set("views", path.resolve(this.baseDirectory, "./views"));
-
-        this.app.get("/", async (req, res) => {
-            if (await this.isLoggedIn(req))
-                res.redirect("/dashboard");
-            else
-                res.render("Login");
-        });
-
-        this.app.get("/logout", async (req, res) => {
-            res.clearCookie("username");
-            res.clearCookie("password");
-            res.render("Message", { message: "You have been logged out!", buttonText: "Go to Login", buttonLink: "/", isError: false });
-        });
-
-        this.app.all("/dashboard", async (req, res) => {
-            if (await this.isLoggedIn(req)) {
-                var options = { secure: true, signed: true, maxAge: undefined as unknown as number }
-                if (req.body.stayLoggedIn === "on")
-                    options.maxAge = 1000 * 60 * 60 * 24 * this.maxSession;
-
-                if (req.body.username !== undefined && req.body.password !== undefined) {
-                    res.cookie("username", req.body.username, options);
-                    res.cookie("password", await argon2.hash(req.body.username + "_" + req.body.password), options);
-                }
-
-                res.render("Dashboard", { rooms: this.worker.rooms, defaultPassword: this.password === "Password123", GameCode: GameCode });
-            }
-            else
-                res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
-        });
-
-        this.app.get("/room", async (req, res) => {
-            if (await this.isLoggedIn(req)) {
-                const room = this.worker.rooms.get(parseInt(req.query.code as string));
-                if (req.query.code === undefined || room === undefined) {
-                    return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
-                }
-
-                res.render("Room", { room: room, GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate });
-            }
-            else
-                res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
-        });
-
-        this.app.post("/room/close", async (req, res) => {
-            if (await this.isLoggedIn(req)) {
-                const room = this.worker.rooms.get(parseInt(req.query.code as string));
-                if (req.query.code === undefined || room === undefined) {
-                    return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
-                }
-
-                room.connections.forEach(connection => {
-                    connection.disconnect(req.body.closeReason as unknown as string);
-                });
-
-                res.render("Message", { message: "Room was closed", buttonText: "Go Back", buttonLink: "/dashboard", isError: false });
-            }
-            else
-                res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
-        });
-
-        this.app.post("/room/chat", async (req, res) => {
-            if (await this.isLoggedIn(req)) {
-                const room = this.worker.rooms.get(parseInt(req.query.code as string));
-                if (req.query.code === undefined || room === undefined) {
-                    return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
-                }
-
-                room.sendChat(req.body.message);
-
-                res.redirect("/room?code=" + room.code);
-            }
-            else
-                res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
-        });
-
-        this.app.get("/room/kick", async (req, res) => {
-            if (await this.isLoggedIn(req)) {
-                const room = this.worker.rooms.get(parseInt(req.query.code as string));
-                if (req.query.code === undefined || room === undefined) {
-                    return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
-                }
-
-                room.connections.get(parseInt(req.query.player as string))?.disconnect(req.query.message as string ?? "You were kicked by the server");
-
-                res.redirect("/room?code=" + room.code);
-            }
-            else
-                res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
-        });
-
-        this.server.listen(this.port, () => {
-            this.logger.info("Cockpit is online on port %s!", this.port);
-        });
+        this.serverHandler = new ServerHandler(this);
     }
 
     @EventListener("room.create")
     onRoomCreate(ev: RoomCreateEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.destroy")
     onRoomDestroy(ev: RoomDestroyEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.setprivacy")
     onRoomSetPrivacy(ev: RoomSetPrivacyEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.selecthost")
     onRoomSelectHost(ev: RoomSelectHostEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.gamestart")
     onRoomGameStart(ev: RoomGameStartEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.gameend")
     onRoomGameEnd(ev: RoomGameEndEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("player.join")
     onPlayerJoin(ev: PlayerJoinEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("player.leave")
     onPlayerLeave(ev: PlayerLeaveEvent) {
-        this.updateDashboard();
-        this.updateRoom(ev.room);
+        this.serverHandler.updateDashboard();
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("player.syncsettings")
     onPlayerSyncSettings(ev: PlayerSyncSettingsEvent) {
-        this.updateRoom(ev.room);
+        this.serverHandler.updateRoom(ev.room);
     }
 
     @EventListener("room.assignroles")
     onRoomAssignRoles(ev: RoomAssignRolesEvent) {
-        this.updateRoom(ev.room);
+        this.serverHandler.updateRoom(ev.room);
     }
 
     onConfigUpdate(oldConfig: any, newConfig: any) {
@@ -220,39 +104,5 @@ export class CockpitPlugin extends WorkerPlugin {
         this.password = newConfig.password;
         this.maxSession = newConfig.maxSession;
         this.updateDelay = newConfig.updateDelay;
-    }
-
-    updateDashboard() {
-        setTimeout(() => {
-            try {
-                this.io.sockets.emit('update-dashboard',
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Dashboard.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
-                            { rooms: this.worker.rooms, defaultPassword: this.password === "Password123", GameCode: GameCode }) });
-            }
-            catch(err) {
-                this.io.sockets.emit('update-dashboard',
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
-                            { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
-            }
-        }, 1000 * this.updateDelay);
-    }
-
-    updateRoom(room: any) {
-        setTimeout(() => {
-            try {
-                this.io.sockets.emit('update-room-' + room.code,
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Room.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
-                            { room: room, GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate }) });
-            }
-            catch(err) {
-                this.io.sockets.emit('update-dashboard',
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
-                            { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
-            }
-        }, 1000 * this.updateDelay);
-    }
-
-    async isLoggedIn(req: any) {
-        return (req.body.username === this.username || req.signedCookies.username === this.username) && (req.body.password === this.password || await argon2.verify(req.signedCookies.password, this.username + "_" + this.password));
     }
 }
