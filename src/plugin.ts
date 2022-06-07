@@ -9,14 +9,30 @@ import {
     GameMap,
     GameKeyword,
     KillDistance,
-    TaskBarUpdate
+    TaskBarUpdate,
+    RoomCreateEvent,
+    RoomDestroyEvent,
+    RoomSelectHostEvent,
+    RoomGameStartEvent,
+    RoomGameEndEvent,
+    BaseRoom
 } from "@skeldjs/hindenburg";
+import {
+    RoomSetPrivacyEvent,
+    RoomAssignRolesEvent,
+    PlayerJoinEvent,
+    PlayerLeaveEvent,
+    PlayerSyncSettingsEvent
+} from "@skeldjs/core";
 import express from "express";
+import http from "http";
+import { Server } from "socket.io"
 import bodyParser from "body-parser" ;
 import cookieParser from "cookie-parser";
 import path from "path";
 import ejs from "ejs";
 import argon2 from "argon2";
+import fs from "fs";
 
 @HindenburgPlugin("hbplugin-cockpit")
 export class CockpitPlugin extends WorkerPlugin {
@@ -24,7 +40,10 @@ export class CockpitPlugin extends WorkerPlugin {
     password: string
     maxSession: number
     port: number
+    updateDelay: number
     app = express();
+    server = http.createServer(this.app);
+    io = new Server(this.server);
 
     constructor(worker: Worker, config: any) {
         super(worker, config);
@@ -33,6 +52,7 @@ export class CockpitPlugin extends WorkerPlugin {
         this.password = config.password;
         this.maxSession = config.maxSession;
         this.port = config.port;
+        this.updateDelay = config.updateDelay;
     }
 
     async onPluginLoad() {
@@ -132,15 +152,104 @@ export class CockpitPlugin extends WorkerPlugin {
                 res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
         });
 
-        this.app.listen(this.port, () => {
+        this.server.listen(this.port, () => {
             this.logger.info("Cockpit is online on port %s!", this.port);
         });
+    }
+
+    @EventListener("room.create")
+    onRoomCreate(ev: RoomCreateEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.destroy")
+    onRoomDestroy(ev: RoomDestroyEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.setprivacy")
+    onRoomSetPrivacy(ev: RoomSetPrivacyEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.selecthost")
+    onRoomSelectHost(ev: RoomSelectHostEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.gamestart")
+    onRoomGameStart(ev: RoomGameStartEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.gameend")
+    onRoomGameEnd(ev: RoomGameEndEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("player.join")
+    onPlayerJoin(ev: PlayerJoinEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("player.leave")
+    onPlayerLeave(ev: PlayerLeaveEvent) {
+        this.updateDashboard();
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("player.syncsettings")
+    onPlayerSyncSettings(ev: PlayerSyncSettingsEvent) {
+        this.updateRoom(ev.room);
+    }
+
+    @EventListener("room.assignroles")
+    onRoomAssignRoles(ev: RoomAssignRolesEvent) {
+        this.updateRoom(ev.room);
     }
 
     onConfigUpdate(oldConfig: any, newConfig: any) {
         this.username = newConfig.username;
         this.password = newConfig.password;
         this.maxSession = newConfig.maxSession;
+        this.updateDelay = newConfig.updateDelay;
+    }
+
+    updateDashboard() {
+        setTimeout(() => {
+            try {
+                this.io.sockets.emit('update-dashboard',
+                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Dashboard.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { rooms: this.worker.rooms, defaultPassword: this.password === "Password123", GameCode: GameCode }) });
+            }
+            catch(err) {
+                this.io.sockets.emit('update-dashboard',
+                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
+            }
+        }, 1000 * this.updateDelay);
+    }
+
+    updateRoom(room: any) {
+        setTimeout(() => {
+            try {
+                this.io.sockets.emit('update-room-' + room.code,
+                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Room.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { room: room, GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate }) });
+            }
+            catch(err) {
+                this.io.sockets.emit('update-dashboard',
+                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
+            }
+        }, 1000 * this.updateDelay);
     }
 
     async isLoggedIn(req: any) {
