@@ -17,9 +17,30 @@
         <script src="/socket.io/socket.io.js"></script>
         <script>
             var socket = io();
-            socket.on('update-room-<%= room.code %>', function (msg) {
-                $("body").html(msg.data)
+            socket.on('update-room', function (msg) {
+                if (msg.code === <%= room.code %>)
+                    $("body").html(msg.data)
             });
+
+            socket.on('add-room-log', function (msg) {
+                if (msg.code === <%= room.code %>) {
+                    var log = document.getElementById('log');
+                    var container = document.createElement('div');
+                    container.classList.add("nomargin");
+
+                    var text = document.createElement('p')
+                    text.classList.add("nomargin");
+                    text.textContent = "[" + msg.entry.prefix + "] " + msg.entry.message;
+
+                    container.appendChild(text);
+                    log.appendChild(container);
+
+                    log.scrollTo(0, log.scrollHeight);
+                }
+            });
+
+            //var log = document.getElementById('log');
+            //log.scrollTo(0, log.scrollHeight);
         </script>
 
         <style>
@@ -33,13 +54,13 @@
                 font-family: 'Amatic SC';
             }
 
+            tbody {
+                color: aliceblue;
+            }
+
             .form-control {
                 width: 50%;
                 margin: 0 auto;
-            }
-
-            tbody {
-                color: aliceblue;
             }
 
             .navbar {
@@ -84,13 +105,13 @@
                 color: aliceblue;
             }
 
-            #panel div * > :not(a, span){
+            #panel div * > :not(.nomargin){
                 margin-top: 10px;
             }
 
             #grid {
                 display: grid;
-                grid-template-columns: repeat(3, 30%) 10%;
+                grid-template-columns: repeat(3, 1fr);
                 grid-template-rows: repeat(2, 10% 40%);
             }
 
@@ -103,6 +124,23 @@
                 width: 85%;
                 margin: 0 auto;
             }
+
+            #log {
+                display: inline-block;
+                text-align: left;
+                width: 75%;
+                height: 90%;
+                border: solid #070911;
+            }
+
+            #log p {
+                padding: 0.5rem 1rem;
+                text-align: left;
+            }
+
+            #log div {
+                background: #181D3A;
+            }
         </style>
     </head>
 
@@ -113,9 +151,9 @@
                 <h1>Cockpit</h1>
             </div>
             <div>
-                <a type="button" class="btn btn-info" href="/dashboard">Go Back</a>
+                <a type="button" class="btn btn-info nomargin" href="/dashboard">Go Back</a>
             </div>
-            <a type="button" class="right btn btn-danger" href="/logout">Log Out</a>
+            <a type="button" class="right btn btn-danger nomargin" href="/logout">Log Out</a>
         </div>
         <div class="card" id="panel">
             <div class="card-body" id="grid">
@@ -131,25 +169,13 @@
                     </form>
                 </div>
 
-                <div style="grid-row: 3 / 4; grid-column: 1 / 2">
-                    <h1>Chatting</h1>
-                </div>
-
-                <div style="grid-row: 4 / 5; grid-column: 1 / 2">
-                    <form action="/room/chat?code=<%= room.code %>" method="post">
-                        <label for="message">Send message to the Room</label>
-                        <input type="text" id=message name="message" class="form-control" aria-describedby="message" placeholder="Enter the message" required/>
-                        <button type="submit" class="btn btn-danger">Send</button>
-                    </form>
-                </div>
-
                 <div style="grid-row: 1 / 2; grid-column: 2 / 3">
                     <h1>General Information</h1>
                 </div>
 
                 <div style="grid-row: 2 / 3; grid-column: 2 / 3">
                     <p>Code: <%= GameCode.convertIntToString(room.code) %></p>
-                    <p>Host: <%= room.host.playerInfo.defaultOutfit.name %></p>
+                    <p>Host: <%= room.host.playerInfo?.defaultOutfit.name ?? room.host.username %></p>
                     <p>Privacy: <%= room.privacy.charAt(0).toUpperCase() + room.privacy.slice(1) %></p>
                     <p>Players: <%= room.players.size%> / <%= room.settings.maxPlayers%></p>
                     <p>State: <%= gameState = room.gameState === 0 ? "In Lobby" : room.gameState === 1 ? "In Game" : "Ended" %></p>
@@ -175,24 +201,42 @@
                         </thead>
                         <tbody>
                             <% var i = 0;
-                            room.players.forEach((player, id) => {
-                                i++; %>
+                            room.connections.forEach((connection, id) => {
+                                i++;
+                                let player = connection.getPlayer();
+                                if (player !== undefined || player.playerInfo !== undefined) { %>
                                 <tr>
                                     <th scope="row"><%= i %></th>
-                                    <td><%= player.playerInfo.defaultOutfit.name %></td>
-                                    <td><%= player.playerInfo.roleType.toString().split(" ")[1].replace("Role", "") %></td>
+                                    <td><%= player.playerInfo?.defaultOutfit.name %></td>
+                                    <td><%= player.playerInfo?.roleType.toString().split(" ")[1].replace("Role", "") %></td>
                                     <td><%= player.playerLevel %></td>
                                     <td><%= player.isHost ? "Yes" : "No" %></td>
                                     <td><%= player.clientId %></td>
                                     <td>
-                                        <a href="/room/kick?code=<%= room.code %>&player=<%= player.clientId %>" class="btn btn-danger">
-                                            <span class="glyphicon glyphicon-remove" style="margin-top: 0px"></span>
+                                        <a href="/room/penalty?code=<%= room.code %>&player=<%= player.clientId %>&type=kick" class="btn btn-danger nomargin">
+                                            <span class="glyphicon glyphicon-remove nomargin"></span>
+                                        </a>
+                                        <a href="/room/penalty?code=<%= room.code %>&player=<%= player.clientId %>&type=ban" class="btn btn-danger nomargin">
+                                            <span class="glyphicon glyphicon-ban-circle nomargin"></span>
                                         </a>
                                     </td>
                                 </tr>
-                            <% }) %>
+                                <% }
+                            }) %>
                         </tbody>
                     </table>
+                </div>
+
+                <div style="grid-row: 3 / 4; grid-column: 1 / 2">
+                    <h1>Chatting</h1>
+                </div>
+
+                <div style="grid-row: 4 / 5; grid-column: 1 / 2">
+                    <form action="/room/chat?code=<%= room.code %>" method="post">
+                        <label for="message">Send message to the Room</label>
+                        <input type="text" id=message name="message" class="form-control" aria-describedby="message" placeholder="Enter the message" required/>
+                        <button type="submit" class="btn btn-danger">Send</button>
+                    </form>
                 </div>
 
                 <div style="grid-row: 3 / 4; grid-column: 2 / 3">
@@ -316,10 +360,23 @@
                     </table>
                 </div>
 
-                <div style="grid-row: 1 / 2; grid-column: 4 / 5">
-                    <a href="/room?code=<%= room.code %>" class="btn btn-info btn-lg" id="refresh">
-                        <span class="glyphicon glyphicon-refresh"></span> Refresh
-                    </a>
+                <div style="grid-row: 3 / 4; grid-column: 3 / 4">
+                    <h1>Log</h1>
+                </div>
+
+                <div style="grid-row: 4 / 5; grid-column: 3 / 4">
+                    <div id="log" class="scroll">
+                        <% logger.readLog().forEach(entry => { %>
+                            <div class="nomargin">
+                                <p class="nomargin"><%= entry %></p>
+                            </div>
+                        <% }) %>
+                    </div>
+
+                    <script>
+                        var log = document.getElementById('log');
+                        log.scrollTo(0, log.scrollHeight);
+                    </script>
                 </div>
             </div>
         </div>

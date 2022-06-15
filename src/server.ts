@@ -4,6 +4,7 @@ import {
     GameKeyword,
     KillDistance,
     TaskBarUpdate,
+    Connection,
 } from "@skeldjs/hindenburg";
 import { CockpitPlugin } from "./plugin";
 import bodyParser from "body-parser";
@@ -15,6 +16,7 @@ import http from "http";
 import { Server } from "socket.io";
 import ejs from "ejs";
 import fs from "fs";
+import { LogEntry } from "./logEntry";
 
 export class ServerHandler {
     plugin: CockpitPlugin
@@ -71,7 +73,7 @@ export class ServerHandler {
                     return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
                 }
 
-                res.render("Room", { room: room, GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate });
+                res.render("Room", { room: room, logger: this.plugin.roomLoggers.get(room.code), GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate });
             }
             else
                 res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
@@ -109,14 +111,17 @@ export class ServerHandler {
                 res.render("Message", { message: "You are not logged in!\nLog in to access this page", buttonText: "Go to Login", buttonLink: "/", isError: true });
         });
 
-        this.app.get("/room/kick", async (req, res) => {
+        this.app.get("/room/penalty", async (req, res) => {
             if (await this.isLoggedIn(req)) {
                 const room = this.plugin.worker.rooms.get(parseInt(req.query.code as string));
                 if (req.query.code === undefined || room === undefined) {
                     return res.render("Message", { message: "Room not found!", buttonText: "Go Back", buttonLink: "/dashboard", isError: true });
                 }
 
-                room.connections.get(parseInt(req.query.player as string))?.disconnect(req.query.message as string ?? "You were kicked by the server");
+                if (req.query.type == undefined || req.query.type == "kick")
+                    room.connections.get(parseInt(req.query.player as string))?.disconnect(req.query.message as string ?? "You were kicked by the server");
+                else if (req.query.type == "ban")
+                    room.banPlayer(room.connections.get(parseInt(req.query.player as string)) as Connection, req.query.message as string ?? "You were banned by the server");
 
                 res.redirect("/room?code=" + room.code);
             }
@@ -147,13 +152,27 @@ export class ServerHandler {
     updateRoom(room: any) {
         setTimeout(() => {
             try {
-                this.io.sockets.emit('update-room-' + room.code,
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.plugin.baseDirectory, "./views/Room.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
-                            { room: room, GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate }) });
+                this.io.sockets.emit('update-room',
+                    { code: room.code, data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.plugin.baseDirectory, "./views/Room.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { room: room, logger: this.plugin.roomLoggers.get(room.code), GameCode: GameCode, GameMap: GameMap, GameKeyword: GameKeyword, KillDistance: KillDistance, TaskBarUpdate: TaskBarUpdate }) });
             }
             catch(err) {
-                this.io.sockets.emit('update-dashboard',
-                    { data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.plugin.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                this.io.sockets.emit('update-room',
+                    { code: room.code, data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.plugin.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
+                            { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
+            }
+        }, 1000 * this.plugin.updateDelay);
+    }
+
+    addRoomLog(room: any, logEntry: LogEntry) {
+        setTimeout(() => {
+            try {
+                this.plugin.roomLoggers.get(room.code)?.appendLogEntry(logEntry);
+                this.io.sockets.emit('add-room-log', { code: room.code, entry: logEntry });
+            }
+            catch(err) {
+                this.io.sockets.emit('update-room',
+                    { code: room.code, data: ejs.render("<body>" + fs.readFileSync(path.resolve(this.plugin.baseDirectory, "./views/Message.ejs"), "utf8").split("<body>")[1].split("</body>")[0] + "</body>",
                             { message: "There was an error whilest rendering the update if the page! If this continues to happen, increase the update delay.", buttonText: "Reload Page", buttonLink: "/", isError: true }) });
             }
         }, 1000 * this.plugin.updateDelay);
